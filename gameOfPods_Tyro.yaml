@@ -1,0 +1,84 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: development
+  name: developer-role
+rules:
+- apiGroups: [""]
+  resources: ["pods","services","persistentvolumeclaims"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: developer-rolebinding
+  namespace: development
+subjects:
+- kind: User
+  name: drogo
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: developer-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name:  jekyll-site
+  namespace: development
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: jekyll
+  namespace: development
+  labels:
+    run: jekyll
+spec:
+  volumes:
+    - name: site
+      persistentVolumeClaim:
+        claimName: jekyll-site
+  initContainers:
+  - name: copy-jekyll-site
+    image: kodekloud/jekyll
+    volumeMounts:
+      - mountPath: /site
+        name: site
+    command: [ "jekyll", "new", "/site" ]
+  containers:
+  - name: jekyll
+    image: kodekloud/jekyll-serve 
+    ports:
+    - containerPort: 4000
+    volumeMounts:
+      - mountPath: /site
+        name: site
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jekyll
+  namespace: development
+spec:
+  type: NodePort
+  selector:
+    run: jekyll
+  ports:
+  - port: 8080
+    nodePort: 30097
+    targetPort: 4000
+
+#--- CONFIGURE KUBECTL CONTEXT
+#FROM https://docs.bitnami.com/kubernetes/how-to/configure-rbac-in-your-kubernetes-cluster/#use-case-1-create-user-with-limited-namespace-access
+#kubectl config set-credentials drogo --client-certificate=/root/drogo.crt --client-key=/root/drogo.key
+#kubectl config set-context developer --cluster=kubernetes --namespace=development --user=drogo
+#kubectl config use-context developer
